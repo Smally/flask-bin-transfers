@@ -12,8 +12,10 @@
             "sap/m/Table",
             "sap/m/Column",
             "sap/m/Text",
-            "sap/ui/model/json/JSONModel"
-        ], function(MessageBox, Input, Button, Label, Table, Column, Text, JSONModel) {
+            "sap/m/ColumnListItem",
+            "sap/ui/model/json/JSONModel",
+            "sap/m/CheckBox"
+        ], function(MessageBox, Input, Button, Label, Table, Column, Text, ColumnListItem, JSONModel, CheckBox) {
             var app = new sap.m.App({initialPage:"mainPage"});
             var page = new sap.m.Page({
                 title: "Verify Inventory at Bin",
@@ -22,49 +24,83 @@
                     new Input({ id: "binInput", placeholder: "Type bin location..." }),
                     new Button({ text: "Search", press: searchBin }),
                     new Table({
-    id: "productsTable",
-    items: {
-        path: "products>/value",
-        template: new sap.m.ColumnListItem({
-            cells: [
-                new sap.m.Text({text: "{products>ProductCode}"}),
-                new sap.m.Text({text: "{products>Batch}"}),
-                new sap.m.Text({text: "{products>Quantity}"})
-            ]
-        })
-    },
-    columns: [
-        new Column({ header: new Text({ text: "Product Code" }) }),
-        new Column({ header: new Text({ text: "Batch" }) }),
-        new Column({ header: new Text({ text: "Quantity" }) })
-    ]
-})
-
+                        id: "productsTable",
+                        items: {
+                            path: "/value",
+                            template: new ColumnListItem({
+                                cells: [
+                                    new Text({text: "{ProductCode}"}),
+                                    new Text({text: "{Batch}"}),
+                                    new Text({text: "{Quantity}"}),
+                                    new CheckBox({
+                                        selected: "{Confirmed}",
+                                        select: function(evt) {
+                                            var context = evt.getSource().getBindingContext();
+                                            context.getModel().setProperty(context.getPath() + "/Confirmed", evt.getParameter("selected"));
+                                        }
+                                    })
+                                ]
+                            })
+                        },
+                        columns: [
+                            new Column({ header: new Text({ text: "Product Code" }) }),
+                            new Column({ header: new Text({ text: "Batch" }) }),
+                            new Column({ header: new Text({ text: "Quantity" }) }),
+                            new Column({ header: new Text({ text: "Confirm" }) })
+                        ]
+                    }),
+                    new Button({ text: "Send Transfer", press: sendTransfer })
                 ]
             });
             app.addPage(page);
             app.placeAt("content");
 
             function searchBin() {
-    var binLocation = sap.ui.getCore().byId("binInput").getValue();
-    jQuery.ajax({
-        url: '/search_bin?bin_location=' + encodeURIComponent(binLocation),
-        type: 'GET',
-        success: function(data) {
-            var oModel = new sap.ui.model.json.JSONModel();
-            oModel.setData(data);
-            sap.ui.getCore().byId("productsTable").setModel(oModel, "products");
-        },
-        error: function() {
-            MessageBox.error("Failed to fetch data.");
-        }
-    });
-}
+                var binLocation = sap.ui.getCore().byId("binInput").getValue();
+                jQuery.ajax({
+                    url: '/search_bin?bin_location=' + encodeURIComponent(binLocation),
+                    type: 'GET',
+                    success: function(data) {
+                        var oModel = new JSONModel(data);
+                        sap.ui.getCore().byId("productsTable").setModel(oModel);
+                    },
+                    error: function() {
+                        MessageBox.error("Failed to fetch data.");
+                    }
+                });
+            }
 
+            function sendTransfer() {
+                var oTable = sap.ui.getCore().byId("productsTable");
+                var oItems = oTable.getItems();
+                var oData = [];
+                oItems.forEach(function(item) {
+                    var context = item.getBindingContext();
+                    var data = context.getModel().getProperty(context.getPath());
+                    if(data.Confirmed) {
+                        oData.push(data);
+                    }
+                });
+                if(oData.length > 0) {
+                    // Send this data to Flask which will handle the SAP B1 Service Layer
+                    jQuery.ajax({
+                        url: '/create_transfer',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(oData),
+                        success: function(response) {
+                            MessageBox.success("Transfer successful!");
+                        },
+                        error: function() {
+                            MessageBox.error("Failed to send transfer.");
+                        }
+                    });
+                } else {
+                    MessageBox.warning("No items confirmed for transfer.");
+                }
+            }
         });
     </script>
-
-
 </head>
 <body class="sapUiBody" id="content"></body>
 </html>

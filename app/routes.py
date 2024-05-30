@@ -1,6 +1,15 @@
 from flask import Blueprint, request, jsonify, send_from_directory
+import requests
+import os
+import app
+
+from sap_session import SAPSessionManager
+sap_manager = SAPSessionManager()
 
 main = Blueprint('main', __name__)
+
+from dotenv import load_dotenv
+load_dotenv() 
 
 @main.route('/')
 def index():
@@ -13,25 +22,30 @@ def search_bin():
     if not bin_location:
         return jsonify({"error": "Missing bin location parameter"}), 400
 
-    # Dummy data for testing
-    dummy_data = {
-        "value": [
-            {"BinLocation": "A1", "ProductCode": "P001", "Batch": "B001", "Quantity": 100},
-            {"BinLocation": "A1", "ProductCode": "P002", "Batch": "B002", "Quantity": 150},
-            {"BinLocation": "A1", "ProductCode": "P003", "Batch": "B003", "Quantity": 200}
-        ]
-    }
+    if os.getenv('USE_DEMO_DATA') == "true":
+        # Return demo data
+        dummy_data = {
+            "value": [
+                {"BinLocation": "A1", "ProductCode": "P001", "Batch": "B001", "Quantity": 100},
+                {"BinLocation": "A1", "ProductCode": "P002", "Batch": "B002", "Quantity": 150},
+                {"BinLocation": "A1", "ProdufctCode": "P003", "Batch": "B003", "Quantity": 200}
+            ]
+        }
+        return jsonify(dummy_data)
+    else:
+        response = sap_manager.request('GET', f"InventoryLocations?$filter=BinLocation eq '{bin_location}'")
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({"error": "Failed to fetch data from SAP"}), response.status_code
 
-    # Filter data based on bin_location for a more realistic simulation
-    filtered_data = {
-        "value": [item for item in dummy_data["value"] if item["BinLocation"] == bin_location]
-    }
-
-    return jsonify(filtered_data)
 
 
 @main.route('/create_transfer', methods=['POST'])
 def create_transfer():
     data = request.json
-    # Here you would add the code to interact with SAP B1 service layer
-    return jsonify(status="success", data=data)
+    response = sap_manager.request('POST', 'StockTransfers', json=data)
+    if response.status_code == 201:
+        return jsonify({"message": "Stock transfer created successfully"})
+    else:
+        return jsonify({"error": "Failed to create stock transfer"}), response.status_code
