@@ -1,0 +1,70 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>SAP B1 Stock Transfer</title>
+    <script src="https://openui5.hana.ondemand.com/resources/sap-ui-core.js" data-sap-ui-theme="sap_fiori_3"></script>
+    <script>
+        sap.ui.define([
+            "sap/m/MessageBox",
+            "sap/m/Input",
+            "sap/m/Button",
+            "sap/m/Label",
+            "sap/m/Table",
+            "sap/m/Column",
+            "sap/m/Text",
+            "sap/ui/model/json/JSONModel"
+        ], function(MessageBox, Input, Button, Label, Table, Column, Text, JSONModel) {
+            var app = new sap.m.App({initialPage:"mainPage"});
+            var page = new sap.m.Page({
+                title: "Verify Inventory at Bin",
+                content: [
+                    new Label({ text: "Enter Bin Location:" }),
+                    new Input({ id: "binInput", placeholder: "Type bin location..." }),
+                    new Button({ text: "Search", press: searchBin }),
+                    new Table({
+    id: "productsTable",
+    items: {
+        path: "products>/value",
+        template: new sap.m.ColumnListItem({
+            cells: [
+                new sap.m.Text({text: "{products>ProductCode}"}),
+                new sap.m.Text({text: "{products>Batch}"}),
+                new sap.m.Text({text: "{products>Quantity}"})
+            ]
+        })
+    },
+    columns: [
+        new Column({ header: new Text({ text: "Product Code" }) }),
+        new Column({ header: new Text({ text: "Batch" }) }),
+        new Column({ header: new Text({ text: "Quantity" }) })
+    ]
+})
+
+                ]
+            });
+            app.addPage(page);
+            app.placeAt("content");
+
+            function searchBin() {
+    var binLocation = sap.ui.getCore().byId("binInput").getValue();
+    jQuery.ajax({
+        url: '/search_bin?bin_location=' + encodeURIComponent(binLocation),
+        type: 'GET',
+        success: function(data) {
+            var oModel = new sap.ui.model.json.JSONModel();
+            oModel.setData(data);
+            sap.ui.getCore().byId("productsTable").setModel(oModel, "products");
+        },
+        error: function() {
+            MessageBox.error("Failed to fetch data.");
+        }
+    });
+}
+
+        });
+    </script>
+
+
+</head>
+<body class="sapUiBody" id="content"></body>
+</html>
