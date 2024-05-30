@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify, send_from_directory, session
 import requests
 import os
 import app
@@ -10,6 +10,23 @@ main = Blueprint('main', __name__)
 
 from dotenv import load_dotenv
 load_dotenv() 
+
+
+@main.route('/login', methods=['POST'])
+def login():
+    credentials = request.get_json()
+    username = credentials['username']
+    password = credentials['password']
+    response = requests.post(
+        os.getenv('SAP_B1_ENDPOINT') + "/Login",
+        json={"UserName": username, "Password": password, "CompanyDB": os.getenv('SAP_B1_COMPANYDB')}
+    )
+
+    if response.status_code == 200:
+        session['sap_cookie'] = response.cookies.get_dict()
+        return jsonify({"message": "Login successful"})
+    else:
+        return jsonify({"error": "Invalid credentials"}), 401
 
 @main.route('/')
 def index():

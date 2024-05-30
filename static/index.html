@@ -1,59 +1,78 @@
 <!DOCTYPE HTML>
 <html>
 <head>
-    <title>SAP B1 Stock Transfer</title>
-    <script src="https://openui5.hana.ondemand.com/resources/sap-ui-core.js" data-sap-ui-theme="sap_fiori_3"></script>
+    <title>SAP B1 Integration</title>
+    <script src="https://openui5.hana.ondemand.com/resources/sap-ui-core.js" data-sap-ui-theme="sap_fiori_3" data-sap-ui-libs="sap.ui.layout,sap.m"></script>
     <script>
         sap.ui.define([
-            "sap/m/MessageBox",
+            "sap/ui/layout/VerticalLayout",
             "sap/m/Input",
             "sap/m/Button",
             "sap/m/Label",
+            "sap/m/MessageBox",
             "sap/m/Table",
             "sap/m/Column",
             "sap/m/Text",
             "sap/m/ColumnListItem",
             "sap/ui/model/json/JSONModel",
-            "sap/m/CheckBox"
-        ], function(MessageBox, Input, Button, Label, Table, Column, Text, ColumnListItem, JSONModel, CheckBox) {
-            var app = new sap.m.App({initialPage:"mainPage"});
-            var page = new sap.m.Page({
-                title: "Verify Inventory at Bin",
+            "sap/m/App",
+            "sap/m/Page"
+        ], function(VerticalLayout, Input, Button, Label, MessageBox, Table, Column, Text, ColumnListItem, JSONModel, App, Page) {
+            var app = new App();
+
+            var loginPage = new Page({
+                title: "Login to SAP B1",
                 content: [
-                    new Label({ text: "Enter Bin Location:" }),
+                    new VerticalLayout({
+                        width: "100%",
+                        content: [
+                            new Label({ text: "Username" }),
+                            new Input({ id: "username", placeholder: "Enter Username" }),
+                            new Label({ text: "Password" }),
+                            new Input({ id: "password", placeholder: "Enter Password", type: "Password" }),
+                            new Button({ text: "Login", press: login })
+                        ]
+                    })
+                ]
+            });
+
+            var mainPage = new Page({
+                title: "SAP B1 Stock Transfer",
+                content: [
                     new Input({ id: "binInput", placeholder: "Type bin location..." }),
-                    new Button({ text: "Search", press: searchBin }),
+                    new Button({ text: "Search Bin", press: searchBin }),
                     new Table({
                         id: "productsTable",
-                        items: {
-                            path: "/value",
-                            template: new ColumnListItem({
-                                cells: [
-                                    new Text({text: "{ProductCode}"}),
-                                    new Text({text: "{Batch}"}),
-                                    new Text({text: "{Quantity}"}),
-                                    new CheckBox({
-                                        selected: "{Confirmed}",
-                                        select: function(evt) {
-                                            var context = evt.getSource().getBindingContext();
-                                            context.getModel().setProperty(context.getPath() + "/Confirmed", evt.getParameter("selected"));
-                                        }
-                                    })
-                                ]
-                            })
-                        },
                         columns: [
                             new Column({ header: new Text({ text: "Product Code" }) }),
                             new Column({ header: new Text({ text: "Batch" }) }),
-                            new Column({ header: new Text({ text: "Quantity" }) }),
-                            new Column({ header: new Text({ text: "Confirm" }) })
+                            new Column({ header: new Text({ text: "Quantity" }) })
                         ]
                     }),
                     new Button({ text: "Send Transfer", press: sendTransfer })
                 ]
             });
-            app.addPage(page);
-            app.placeAt("content");
+
+            app.addPage(loginPage).placeAt("content");
+
+            function login() {
+                var username = sap.ui.getCore().byId("username").getValue();
+                var password = sap.ui.getCore().byId("password").getValue();
+                jQuery.ajax({
+                    url: '/login',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ username: username, password: password }),
+                    success: function(response) {
+                        MessageBox.success("Logged in successfully.");
+                        app.removeAllPages();
+                        app.addPage(mainPage);
+                    },
+                    error: function(xhr) {
+                        MessageBox.error("Login failed: " + xhr.responseText);
+                    }
+                });
+            }
 
             function searchBin() {
                 var binLocation = sap.ui.getCore().byId("binInput").getValue();
@@ -77,28 +96,23 @@
                 oItems.forEach(function(item) {
                     var context = item.getBindingContext();
                     var data = context.getModel().getProperty(context.getPath());
-                    if(data.Confirmed) {
-                        oData.push(data);
+                    oData.push(data);
+                });
+                jQuery.ajax({
+                    url: '/create_transfer',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(oData),
+                    success: function(response) {
+                        MessageBox.success("Transfer successful!");
+                    },
+                    error: function() {
+                        MessageBox.error("Failed to send transfer.");
                     }
                 });
-                if(oData.length > 0) {
-                    // Send this data to Flask which will handle the SAP B1 Service Layer
-                    jQuery.ajax({
-                        url: '/create_transfer',
-                        type: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify(oData),
-                        success: function(response) {
-                            MessageBox.success("Transfer successful!");
-                        },
-                        error: function() {
-                            MessageBox.error("Failed to send transfer.");
-                        }
-                    });
-                } else {
-                    MessageBox.warning("No items confirmed for transfer.");
-                }
             }
+
+            return app;
         });
     </script>
 </head>
