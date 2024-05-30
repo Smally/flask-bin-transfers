@@ -9,3 +9,7 @@ SAP_B1_USERNAME=myusername
 SAP_B1_PASSWORD=mypassword  
 SAP_B1_COMPANYDB=mycompanydb  
  
+
+
+todo:  
+implement SAP service layer endpoints  
